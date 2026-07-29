@@ -8,6 +8,7 @@ enum SymbolType
     Symbol_Section,
     Symbol_Function,
     Symbol_Comment,
+    Symbol_Import,
 };
 
 struct Symbol

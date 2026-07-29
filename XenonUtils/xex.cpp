@@ -9,7 +9,7 @@
 #include <xex_patcher.h>
 
 #define STRINGIFY(X) #X
-#define XE_EXPORT(MODULE, ORDINAL, NAME, TYPE) { (ORDINAL), "__imp__" STRINGIFY(NAME) }
+#define XE_EXPORT(MODULE, ORDINAL, NAME, TYPE) { (ORDINAL), "__import__" STRINGIFY(NAME) }
 
 #ifndef _WIN32
 
@@ -336,7 +336,7 @@ Image Xex2LoadImage(const uint8_t* data, size_t dataSize)
                     auto name = names->find(originalData->originalData.ordinal);
                     if (name != names->end())
                     {
-                        image.symbols.insert({ name->second, descriptors[im].firstThunk, sizeof(thunk), Symbol_Function });
+                        image.symbols.insert({ name->second, descriptors[im].firstThunk, sizeof(thunk), Symbol_Import });
                     }
 
                     memcpy(originalThunk, thunk, sizeof(thunk));

@@ -30,7 +30,7 @@ int main(int argc, char* argv[])
         auto entry = recompiler.image.symbols.find(recompiler.image.entry_point);
         if (entry != recompiler.image.symbols.end())
         {
-            entry->name = "_xstart";
+            entry->name = fmt::format("sub_{:X}", recompiler.image.entry_point);
         }
 
         const char* headerFilePath =

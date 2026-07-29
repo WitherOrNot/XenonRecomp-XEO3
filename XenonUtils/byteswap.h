@@ -2,6 +2,12 @@
 
 #include <cassert>
 
+#ifdef _MSC_VER
+#define __builtin_bswap16(x) _byteswap_ushort(x)
+#define __builtin_bswap32(x) _byteswap_ulong(x)
+#define __builtin_bswap64(x) _byteswap_uint64(x)
+#endif
+
 template<typename T>
 inline T ByteSwap(T value)
 {

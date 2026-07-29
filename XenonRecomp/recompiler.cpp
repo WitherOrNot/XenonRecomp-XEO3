@@ -234,7 +234,7 @@ void Recompiler::Analyse()
             }
 
             auto fnSymbol = image.symbols.find(base);
-            if (fnSymbol != image.symbols.end() && fnSymbol->address == base && fnSymbol->type == Symbol_Function)
+            if (fnSymbol != image.symbols.end() && fnSymbol->address == base && (fnSymbol->type == Symbol_Function || fnSymbol->type == Symbol_Import))
             {
                 assert(fnSymbol->address == base);
 
@@ -275,7 +275,7 @@ bool Recompiler::Recompile(
                 localVariables.r[index] = true;
                 return fmt::format("r{}", index);
             }
-            return fmt::format("ctx.r{}", index);
+            return fmt::format("ADJ(ctx)->r{}", index);
         };
 
     auto f = [&](size_t index)
@@ -286,7 +286,7 @@ bool Recompiler::Recompile(
                 localVariables.f[index] = true;
                 return fmt::format("f{}", index);
             }
-            return fmt::format("ctx.f{}", index);
+            return fmt::format("ADJ(ctx)->f{}", index);
         };
 
     auto v = [&](size_t index)
@@ -297,7 +297,7 @@ bool Recompiler::Recompile(
                 localVariables.v[index] = true;
                 return fmt::format("v{}", index);
             }
-            return fmt::format("ctx.v{}", index);
+            return fmt::format("ADJ(ctx)->v{}", index);
         };
 
     auto cr = [&](size_t index)
@@ -307,7 +307,7 @@ bool Recompiler::Recompile(
                 localVariables.cr[index] = true;
                 return fmt::format("cr{}", index);
             }
-            return fmt::format("ctx.cr{}", index);
+            return fmt::format("ADJ(ctx)->cr{}", index);
         };
 
     auto ctr = [&]()
@@ -317,7 +317,7 @@ bool Recompiler::Recompile(
                 localVariables.ctr = true;
                 return "ctr";
             }
-            return "ctx.ctr";
+            return "ADJ(ctx)->ctr";
         };
 
     auto xer = [&]()
@@ -327,7 +327,7 @@ bool Recompiler::Recompile(
                 localVariables.xer = true;
                 return "xer";
             }
-            return "ctx.xer";
+            return "ADJ(ctx)->xer";
         };
 
     auto reserved = [&]()
@@ -337,7 +337,7 @@ bool Recompiler::Recompile(
                 localVariables.reserved = true;
                 return "reserved";
             }
-            return "ctx.reserved";
+            return "ADJ(ctx)->reserved";
         };
 
     auto temp = [&]()
@@ -387,7 +387,7 @@ bool Recompiler::Recompile(
             {
                 auto targetSymbol = image.symbols.find(address);
 
-                if (targetSymbol != image.symbols.end() && targetSymbol->address == address && targetSymbol->type == Symbol_Function)
+                if (targetSymbol != image.symbols.end() && targetSymbol->address == address && (targetSymbol->type == Symbol_Function || targetSymbol->type == Symbol_Import))
                 {
                     if (config.nonVolatileRegistersAsLocalVariables && (targetSymbol->name.find("__rest") == 0 || targetSymbol->name.find("__save") == 0))
                     {
@@ -395,7 +395,7 @@ bool Recompiler::Recompile(
                     }
                     else
                     {
-                        println("\t{}(ctx, base);", targetSymbol->name);
+                        println("\t{}(ctx, base, frame);", targetSymbol->name);
                     }
                 }
                 else
@@ -428,7 +428,7 @@ bool Recompiler::Recompile(
             {
                 auto prefix = enable ? "enable" : "disable";
                 auto suffix = csrState != CSRState::Unknown ? "Unconditional" : "";
-                println("\tctx.fpscr.{}FlushMode{}();", prefix, suffix);
+                println("\tADJ(ctx)->fpscr.{}FlushMode{}();", prefix, suffix);
 
                 csrState = newState;
             }
@@ -473,7 +473,7 @@ bool Recompiler::Recompile(
 
                 case 'f':
                     if (reg == "fpscr")
-                        out += "ctx.fpscr";
+                        out += "ADJ(ctx)->fpscr";
                     else
                         out += f(std::atoi(reg.c_str() + 1));
                     break;
@@ -682,7 +682,7 @@ bool Recompiler::Recompile(
 
     case PPC_INST_BCTRL:
         if (!config.skipLr)
-            println("\tctx.lr = 0x{:X};", base + 4);
+            println("\tADJ(ctx)->lr = 0x{:X};", base + 4);
         println("\tPPC_CALL_INDIRECT_FUNC({}.u32);", ctr());
         csrState = CSRState::Unknown; // the call could change it
         break;
@@ -752,7 +752,7 @@ bool Recompiler::Recompile(
 
     case PPC_INST_BL:
         if (!config.skipLr)
-            println("\tctx.lr = 0x{:X};", base + 4);
+            println("\tADJ(ctx)->lr = 0x{:X};", base + 4);
         printFunctionCall(insn.operands[0]);
         csrState = CSRState::Unknown; // the call could change it
         break;
@@ -1403,19 +1403,19 @@ bool Recompiler::Recompile(
 
 
     case PPC_INST_MFFS:
-        println("\t{}.u64 = ctx.fpscr.loadFromHost();", r(insn.operands[0]));
+        println("\t{}.u64 = ADJ(ctx)->fpscr.loadFromHost();", f(insn.operands[0]));
         break;
 
 
     case PPC_INST_MFLR:
         if (!config.skipLr)
-            println("\t{}.u64 = ctx.lr;", r(insn.operands[0]));
+            println("\t{}.u64 = ADJ(ctx)->lr;", r(insn.operands[0]));
         break;
 
 
     case PPC_INST_MFMSR:
         if (!config.skipMsr)
-            println("\t{}.u64 = ctx.msr;", r(insn.operands[0]));
+            println("\t{}.u64 = ADJ(ctx)->msr;", r(insn.operands[0]));
         break;
 
 
@@ -1453,19 +1453,19 @@ bool Recompiler::Recompile(
 
 
     case PPC_INST_MTFSF:
-        println("\tctx.fpscr.storeFromGuest({}.u32);", f(insn.operands[1]));
+        println("\tADJ(ctx)->fpscr.storeFromGuest({}.u32);", f(insn.operands[1]));
         break;
 
 
     case PPC_INST_MTLR:
         if (!config.skipLr)
-            println("\tctx.lr = {}.u64;", r(insn.operands[0]));
+            println("\tADJ(ctx)->lr = {}.u64;", r(insn.operands[0]));
         break;
 
 
     case PPC_INST_MTMSRD:
         if (!config.skipMsr)
-            println("\tctx.msr = ({}.u32 & 0x8020) | (ctx.msr & ~0x8020);", r(insn.operands[0]));
+            println("\tADJ(ctx)->msr = ({}.u32 & 0x8020) | (ADJ(ctx)->msr & ~0x8020);", r(insn.operands[0]));
         break;
 
 
@@ -3075,7 +3075,7 @@ bool Recompiler::Recompile(
         printSetFlushMode(false);
         println("\t{}.f64 = -std::fma({}.f64, {}.f64, {}.f64);", f(insn.operands[0]), f(insn.operands[1]), f(insn.operands[2]), f(insn.operands[3]));
         if (strchr(insn.opcode->name, '.'))
-            println("\tctx.fpscr.setFlags({}.f64);", f(insn.operands[0]));
+            println("\tADJ(ctx)->fpscr.setFlags({}.f64);", f(insn.operands[0]));
         break;
 
 
@@ -3300,7 +3300,7 @@ bool Recompiler::Recompile(
         printSetFlushMode(true);
         // CR[BI]'s GT bit is at bit 1 in the 4-bit field: mask is 0b0100 = 0x4
         println("\tif ((state.cr & (0x4 << (4 * (7 - {})))) != 0) {{", insn.operands[0]);
-        println("\t\tctx.lr = 0x{:X};  // Link to next instruction", base + 4);
+        println("\t\tADJ(ctx)->lr = 0x{:X};  // Link to next instruction", base + 4);
         println("\t\treturn 0x{:X};    // Branch absolute", uint32_t(insn.operands[1]));
         println("\t}}");
         break;
@@ -3600,7 +3600,7 @@ bool Recompiler::Recompile(const Function& fn)
 
 #ifndef XENON_RECOMP_USE_ALIAS
     println("PPC_WEAK_FUNC({}) {{", name);
-    println("\t__imp__{}(ctx, base);", name);
+    println("\t__imp__{}(ctx, base, frame);", name);
     println("}}\n");
 #endif
 
@@ -3747,12 +3747,42 @@ void Recompiler::Recompile(const std::filesystem::path& headerFilePath)
 
         println("PPCFuncMapping PPCFuncMappings[] = {{");
         for (auto& symbol : image.symbols)
-            println("\t{{ 0x{:X}, {} }},", symbol.address, symbol.name);
-
-        println("\t{{ 0, nullptr }}");
+            println("\t{{ 0x{:X}, 0 }},", symbol.address - image.base, symbol.name);
         println("}};");
 
+        println("");
+
+        println("PPCFunc* HostFuncs[] = {{");
+        for (auto& symbol : image.symbols)
+            println("\t&{},", symbol.name);
+        println("}};");
+        println("int HostFuncsCount = sizeof(HostFuncs) / sizeof(PPCFunc*);");
+
         SaveCurrentOutData("ppc_func_mapping.cpp");
+    }
+
+    {
+        println("#include \"ppc_recomp_shared.h\"\n");
+
+        println("__declspec(dllexport) PPCImportMapping PrecompiledImportTable[] = {{");
+        for (auto& symbol : image.symbols) {
+            if (symbol.type == Symbol_Import) println("\t{{ 0x{:X}, 0 }},", symbol.address);
+        }
+        println("\t{{ 0, 0 }},");
+        println("\t{{ 0xFFFFFFFF, 0 }},");
+        println("}};");
+
+        println("");
+
+        int i = 0;
+        for (auto& symbol : image.symbols) {
+            if (symbol.type == Symbol_Import) {
+                println("PPC_IMPORT_FUNC_IMPL({}, {})", symbol.name, i);
+                i++;
+            }
+        }
+
+        SaveCurrentOutData("ppc_import_mapping.cpp");
     }
 
     for (size_t i = 0; i < functions.size(); i++)

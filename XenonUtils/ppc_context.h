@@ -12,11 +12,10 @@
 #include <cstdlib>
 #include <cstring>
 
-#include <x86intrin.h>
-
 #ifdef _WIN32
 #include <intrin.h>
 #else
+#include <x86intrin.h>
 #include <xmmintrin.h>
 #include <smmintrin.h>
 #endif
@@ -24,7 +23,7 @@
 #define PPC_JOIN(x, y) x##y
 #define PPC_XSTRINGIFY(x) #x
 #define PPC_STRINGIFY(x) PPC_XSTRINGIFY(x)
-#define PPC_FUNC(x) void x(PPCContext& __restrict ctx, uint8_t* base)
+#define PPC_FUNC(x) void __userpurge x(PPCRegister* __shifted(PPCContext, 0x80) ctx@<rbx>, uintptr_t base@<r15>, uintptr_t frame@<r14>)
 #define PPC_FUNC_IMPL(x) extern "C" PPC_FUNC(x)
 #define PPC_EXTERN_FUNC(x) extern PPC_FUNC(x)
 #define PPC_WEAK_FUNC(x) __attribute__((weak,noinline)) PPC_FUNC(x)
@@ -107,21 +106,32 @@
 
 #define PPC_MEMORY_SIZE 0x100000000ull
 
-#define PPC_LOOKUP_FUNC(x, y) *(PPCFunc**)(x + PPC_IMAGE_BASE + PPC_IMAGE_SIZE + (uint64_t(uint32_t(y) - PPC_CODE_BASE) * 2))
+#define PPC_LOOKUP_FUNC(x, y) *(PPCFunc**)(ADJ(ctx)->image_mem_base + 2 * (uint64_t)y)
 
 #ifndef PPC_CALL_INDIRECT_FUNC
-#define PPC_CALL_INDIRECT_FUNC(x) (PPC_LOOKUP_FUNC(base, x))(ctx, base)
+#define PPC_CALL_INDIRECT_FUNC(x) (PPC_LOOKUP_FUNC(base, x))(ctx, base, frame)
 #endif
 
-typedef void PPCFunc(struct PPCContext& __restrict__ ctx, uint8_t* base);
+#ifndef PPC_IMPORT_FUNC_IMPL
+#define PPC_IMPORT_FUNC_IMPL(n,i) void __userpurge n(PPCRegister* __shifted(PPCContext, 0x80) ctx@<rbx>, uintptr_t base@<r15>, uintptr_t frame@<r14>) { \
+    PPC_CALL_INDIRECT_FUNC(PrecompiledImportTable[i].dest_addr); \
+}
+#endif
 
 struct PPCFuncMapping
 {
-    size_t guest;
-    PPCFunc* host;
+    uint32_t guest_rva;
+    uint32_t host_rva;
 };
 
-extern PPCFuncMapping PPCFuncMappings[];
+struct PPCImportMapping
+{
+    uint32_t imp_addr;
+    uint32_t dest_addr;
+};
+
+extern "C" PPCFuncMapping PPCFuncMappings[];
+__declspec(dllexport) extern "C" PPCImportMapping PrecompiledImportTable[];
 
 union PPCRegister
 {
@@ -264,248 +274,223 @@ struct PPCFPSCRRegister
     }
 };
 
-struct alignas(0x40) PPCContext
+struct alignas(0x10) PPCContext
 {
-    PPCRegister r3;
-#ifndef PPC_CONFIG_NON_ARGUMENT_AS_LOCAL
-    PPCRegister r0;
-#endif
-    PPCRegister r1;
-#ifndef PPC_CONFIG_NON_ARGUMENT_AS_LOCAL
-    PPCRegister r2;
-#endif
-    PPCRegister r4;
-    PPCRegister r5;
-    PPCRegister r6;
-    PPCRegister r7;
-    PPCRegister r8;
-    PPCRegister r9;
-    PPCRegister r10;
-#ifndef PPC_CONFIG_NON_ARGUMENT_AS_LOCAL
-    PPCRegister r11;
-    PPCRegister r12;
-#endif
-    PPCRegister r13;
-#ifndef PPC_CONFIG_NON_VOLATILE_AS_LOCAL
-    PPCRegister r14;
-    PPCRegister r15;
-    PPCRegister r16;
-    PPCRegister r17;
-    PPCRegister r18;
-    PPCRegister r19;
-    PPCRegister r20;
-    PPCRegister r21;
-    PPCRegister r22;
-    PPCRegister r23;
-    PPCRegister r24;
-    PPCRegister r25;
-    PPCRegister r26;
-    PPCRegister r27;
-    PPCRegister r28;
-    PPCRegister r29;
-    PPCRegister r30;
-    PPCRegister r31;
-#endif
-
-#ifndef PPC_CONFIG_SKIP_LR
-    uint64_t lr;
-#endif
-#ifndef PPC_CONFIG_CTR_AS_LOCAL
-    PPCRegister ctr;
-#endif
-#ifndef PPC_CONFIG_XER_AS_LOCAL
-    PPCXERRegister xer;
-#endif
-#ifndef PPC_CONFIG_RESERVED_AS_LOCAL
-    PPCRegister reserved;
-#endif
-#ifndef PPC_CONFIG_SKIP_MSR
-    uint32_t msr = 0x200A000;
-#endif
-#ifndef PPC_CONFIG_CR_AS_LOCAL
-    PPCCRRegister cr0;
-    PPCCRRegister cr1;
-    PPCCRRegister cr2;
-    PPCCRRegister cr3;
-    PPCCRRegister cr4;
-    PPCCRRegister cr5;
-    PPCCRRegister cr6;
-    PPCCRRegister cr7;
-#endif
-    PPCFPSCRRegister fpscr;
-
-#ifndef PPC_CONFIG_NON_ARGUMENT_AS_LOCAL
-    PPCRegister f0;
-#endif
-    PPCRegister f1;
-    PPCRegister f2;
-    PPCRegister f3;
-    PPCRegister f4;
-    PPCRegister f5;
-    PPCRegister f6;
-    PPCRegister f7;
-    PPCRegister f8;
-    PPCRegister f9;
-    PPCRegister f10;
-    PPCRegister f11;
-    PPCRegister f12;
-    PPCRegister f13;
-#ifndef PPC_CONFIG_NON_VOLATILE_AS_LOCAL
-    PPCRegister f14;
-    PPCRegister f15;
-    PPCRegister f16;
-    PPCRegister f17;
-    PPCRegister f18;
-    PPCRegister f19;
-    PPCRegister f20;
-    PPCRegister f21;
-    PPCRegister f22;
-    PPCRegister f23;
-    PPCRegister f24;
-    PPCRegister f25;
-    PPCRegister f26;
-    PPCRegister f27;
-    PPCRegister f28;
-    PPCRegister f29;
-    PPCRegister f30;
-    PPCRegister f31;
-#endif
-
-    PPCVRegister v0;
-    PPCVRegister v1;
-    PPCVRegister v2;
-    PPCVRegister v3;
-    PPCVRegister v4;
-    PPCVRegister v5;
-    PPCVRegister v6;
-    PPCVRegister v7;
-    PPCVRegister v8;
-    PPCVRegister v9;
-    PPCVRegister v10;
-    PPCVRegister v11;
-    PPCVRegister v12;
-    PPCVRegister v13;
-#ifndef PPC_CONFIG_NON_VOLATILE_AS_LOCAL
-    PPCVRegister v14;
-    PPCVRegister v15;
-    PPCVRegister v16;
-    PPCVRegister v17;
-    PPCVRegister v18;
-    PPCVRegister v19;
-    PPCVRegister v20;
-    PPCVRegister v21;
-    PPCVRegister v22;
-    PPCVRegister v23;
-    PPCVRegister v24;
-    PPCVRegister v25;
-    PPCVRegister v26;
-    PPCVRegister v27;
-    PPCVRegister v28;
-    PPCVRegister v29;
-    PPCVRegister v30;
-    PPCVRegister v31;
-#endif
-#ifndef PPC_CONFIG_NON_ARGUMENT_AS_LOCAL
-    PPCVRegister v32;
-    PPCVRegister v33;
-    PPCVRegister v34;
-    PPCVRegister v35;
-    PPCVRegister v36;
-    PPCVRegister v37;
-    PPCVRegister v38;
-    PPCVRegister v39;
-    PPCVRegister v40;
-    PPCVRegister v41;
-    PPCVRegister v42;
-    PPCVRegister v43;
-    PPCVRegister v44;
-    PPCVRegister v45;
-    PPCVRegister v46;
-    PPCVRegister v47;
-    PPCVRegister v48;
-    PPCVRegister v49;
-    PPCVRegister v50;
-    PPCVRegister v51;
-    PPCVRegister v52;
-    PPCVRegister v53;
-    PPCVRegister v54;
-    PPCVRegister v55;
-    PPCVRegister v56;
-    PPCVRegister v57;
-    PPCVRegister v58;
-    PPCVRegister v59;
-    PPCVRegister v60;
-    PPCVRegister v61;
-    PPCVRegister v62;
-    PPCVRegister v63;
-#endif
-#ifndef PPC_CONFIG_NON_VOLATILE_AS_LOCAL
-    PPCVRegister v64;
-    PPCVRegister v65;
-    PPCVRegister v66;
-    PPCVRegister v67;
-    PPCVRegister v68;
-    PPCVRegister v69;
-    PPCVRegister v70;
-    PPCVRegister v71;
-    PPCVRegister v72;
-    PPCVRegister v73;
-    PPCVRegister v74;
-    PPCVRegister v75;
-    PPCVRegister v76;
-    PPCVRegister v77;
-    PPCVRegister v78;
-    PPCVRegister v79;
-    PPCVRegister v80;
-    PPCVRegister v81;
-    PPCVRegister v82;
-    PPCVRegister v83;
-    PPCVRegister v84;
-    PPCVRegister v85;
-    PPCVRegister v86;
-    PPCVRegister v87;
-    PPCVRegister v88;
-    PPCVRegister v89;
-    PPCVRegister v90;
-    PPCVRegister v91;
-    PPCVRegister v92;
-    PPCVRegister v93;
-    PPCVRegister v94;
-    PPCVRegister v95;
-    PPCVRegister v96;
-    PPCVRegister v97;
-    PPCVRegister v98;
-    PPCVRegister v99;
-    PPCVRegister v100;
-    PPCVRegister v101;
-    PPCVRegister v102;
-    PPCVRegister v103;
-    PPCVRegister v104;
-    PPCVRegister v105;
-    PPCVRegister v106;
-    PPCVRegister v107;
-    PPCVRegister v108;
-    PPCVRegister v109;
-    PPCVRegister v110;
-    PPCVRegister v111;
-    PPCVRegister v112;
-    PPCVRegister v113;
-    PPCVRegister v114;
-    PPCVRegister v115;
-    PPCVRegister v116;
-    PPCVRegister v117;
-    PPCVRegister v118;
-    PPCVRegister v119;
-    PPCVRegister v120;
-    PPCVRegister v121;
-    PPCVRegister v122;
-    PPCVRegister v123;
-    PPCVRegister v124;
-    PPCVRegister v125;
-    PPCVRegister v126;
-    PPCVRegister v127;
-#endif
+  PPCVRegister v63;
+  PPCVRegister v127;
+  PPCRegister f0;
+  PPCRegister f1;
+  PPCRegister f13;
+  PPCRegister f31;
+  PPCCRRegister cr0;
+  PPCCRRegister cr1;
+  PPCCRRegister cr2;
+  PPCCRRegister cr3;
+  PPCCRRegister cr4;
+  PPCCRRegister cr5;
+  PPCCRRegister cr6;
+  PPCCRRegister cr7;
+  uint64_t lr;
+  PPCRegister ctr;
+  uintptr_t image_mem_base;
+  PPCRegister iar;
+  PPCRegister r3;
+  PPCRegister r1;
+  uint32_t host_mxcsr;
+  PPCXERRegister xer;
+  PPCRegister r4;
+  PPCRegister r5;
+  PPCRegister r6;
+  PPCRegister r7;
+  PPCRegister r8;
+  PPCRegister r9;
+  PPCRegister r10;
+  PPCRegister r11;
+  PPCRegister r12;
+  PPCRegister r28;
+  PPCRegister r29;
+  PPCRegister r30;
+  PPCRegister r31;
+  PPCRegister r0;
+  PPCRegister r2;
+  PPCRegister r13;
+  PPCRegister r14;
+  PPCRegister r15;
+  PPCRegister r16;
+  PPCRegister r17;
+  PPCRegister r18;
+  PPCRegister r19;
+  PPCRegister r20;
+  PPCRegister r21;
+  PPCRegister r22;
+  PPCRegister r23;
+  PPCRegister r24;
+  PPCRegister r25;
+  PPCRegister r26;
+  PPCRegister r27;
+  PPCRegister f2;
+  PPCRegister f3;
+  PPCRegister f4;
+  PPCRegister f5;
+  PPCRegister f6;
+  PPCRegister f7;
+  PPCRegister f8;
+  PPCRegister f9;
+  PPCRegister f10;
+  PPCRegister f11;
+  PPCRegister f12;
+  PPCRegister f14;
+  PPCRegister f15;
+  PPCRegister f16;
+  PPCRegister f17;
+  PPCRegister f18;
+  PPCRegister f19;
+  PPCRegister f20;
+  PPCRegister f21;
+  PPCRegister f22;
+  PPCRegister f23;
+  PPCRegister f24;
+  PPCRegister f25;
+  PPCRegister f26;
+  PPCRegister f27;
+  PPCRegister f28;
+  PPCRegister f29;
+  PPCRegister f30;
+  PPCRegister fpscr;
+  uint64_t msr;
+  PPCRegister reserved;
+  PPCVRegister v0;
+  PPCVRegister v1;
+  PPCVRegister v2;
+  PPCVRegister v3;
+  PPCVRegister v4;
+  PPCVRegister v5;
+  PPCVRegister v6;
+  PPCVRegister v7;
+  PPCVRegister v8;
+  PPCVRegister v9;
+  PPCVRegister v10;
+  PPCVRegister v11;
+  PPCVRegister v12;
+  PPCVRegister v13;
+  PPCVRegister v14;
+  PPCVRegister v15;
+  PPCVRegister v16;
+  PPCVRegister v17;
+  PPCVRegister v18;
+  PPCVRegister v19;
+  PPCVRegister v20;
+  PPCVRegister v21;
+  PPCVRegister v22;
+  PPCVRegister v23;
+  PPCVRegister v24;
+  PPCVRegister v25;
+  PPCVRegister v26;
+  PPCVRegister v27;
+  PPCVRegister v28;
+  PPCVRegister v29;
+  PPCVRegister v30;
+  PPCVRegister v31;
+  PPCVRegister v32;
+  PPCVRegister v33;
+  PPCVRegister v34;
+  PPCVRegister v35;
+  PPCVRegister v36;
+  PPCVRegister v37;
+  PPCVRegister v38;
+  PPCVRegister v39;
+  PPCVRegister v40;
+  PPCVRegister v41;
+  PPCVRegister v42;
+  PPCVRegister v43;
+  PPCVRegister v44;
+  PPCVRegister v45;
+  PPCVRegister v46;
+  PPCVRegister v47;
+  PPCVRegister v48;
+  PPCVRegister v49;
+  PPCVRegister v50;
+  PPCVRegister v51;
+  PPCVRegister v52;
+  PPCVRegister v53;
+  PPCVRegister v54;
+  PPCVRegister v55;
+  PPCVRegister v56;
+  PPCVRegister v57;
+  PPCVRegister v58;
+  PPCVRegister v59;
+  PPCVRegister v60;
+  PPCVRegister v61;
+  PPCVRegister v62;
+  PPCVRegister v64;
+  PPCVRegister v65;
+  PPCVRegister v66;
+  PPCVRegister v67;
+  PPCVRegister v68;
+  PPCVRegister v69;
+  PPCVRegister v70;
+  PPCVRegister v71;
+  PPCVRegister v72;
+  PPCVRegister v73;
+  PPCVRegister v74;
+  PPCVRegister v75;
+  PPCVRegister v76;
+  PPCVRegister v77;
+  PPCVRegister v78;
+  PPCVRegister v79;
+  PPCVRegister v80;
+  PPCVRegister v81;
+  PPCVRegister v82;
+  PPCVRegister v83;
+  PPCVRegister v84;
+  PPCVRegister v85;
+  PPCVRegister v86;
+  PPCVRegister v87;
+  PPCVRegister v88;
+  PPCVRegister v89;
+  PPCVRegister v90;
+  PPCVRegister v91;
+  PPCVRegister v92;
+  PPCVRegister v93;
+  PPCVRegister v94;
+  PPCVRegister v95;
+  PPCVRegister v96;
+  PPCVRegister v97;
+  PPCVRegister v98;
+  PPCVRegister v99;
+  PPCVRegister v100;
+  PPCVRegister v101;
+  PPCVRegister v102;
+  PPCVRegister v103;
+  PPCVRegister v104;
+  PPCVRegister v105;
+  PPCVRegister v106;
+  PPCVRegister v107;
+  PPCVRegister v108;
+  PPCVRegister v109;
+  PPCVRegister v110;
+  PPCVRegister v111;
+  PPCVRegister v112;
+  PPCVRegister v113;
+  PPCVRegister v114;
+  PPCVRegister v115;
+  PPCVRegister v116;
+  PPCVRegister v117;
+  PPCVRegister v118;
+  PPCVRegister v119;
+  PPCVRegister v120;
+  PPCVRegister v121;
+  PPCVRegister v122;
+  PPCVRegister v123;
+  PPCVRegister v124;
+  PPCVRegister v125;
+  PPCVRegister v126;
 };
+
+typedef void __userpurge PPCFunc(PPCRegister* __shifted(PPCContext, 0x80) ctx@<rbx>, uintptr_t base@<r15>, uintptr_t frame@<r14>);
+
+extern PPCFunc* HostFuncs[];
+extern int HostFuncsCount;
 
 inline uint8_t VectorMaskL[] =
 {
