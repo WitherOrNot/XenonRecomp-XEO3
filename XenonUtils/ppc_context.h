@@ -23,10 +23,11 @@
 #define PPC_JOIN(x, y) x##y
 #define PPC_XSTRINGIFY(x) #x
 #define PPC_STRINGIFY(x) PPC_XSTRINGIFY(x)
-#define PPC_FUNC(x) void __userpurge x(PPCRegister* __shifted(PPCContext, 0x80) ctx@<rbx>, uintptr_t base@<r15>, uintptr_t frame@<r14>)
+#define PPC_FUNC(x) __attribute__((preserve_none)) void x(uintptr_t ctx, uintptr_t base, uintptr_t frame)
 #define PPC_FUNC_IMPL(x) extern "C" PPC_FUNC(x)
 #define PPC_EXTERN_FUNC(x) extern PPC_FUNC(x)
-#define PPC_WEAK_FUNC(x) __attribute__((weak,noinline)) PPC_FUNC(x)
+#define PPC_WEAK_FUNC(x) __attribute__((weak,noinline,preserve_none)) void x(uintptr_t ctx, uintptr_t base, uintptr_t frame)
+#define ADJ(x) ((PPCContext*)(ctx - 0x80))
 
 #define PPC_FUNC_PROLOGUE() __builtin_assume(((size_t)base & 0x1F) == 0)
 
@@ -113,7 +114,7 @@
 #endif
 
 #ifndef PPC_IMPORT_FUNC_IMPL
-#define PPC_IMPORT_FUNC_IMPL(n,i) void __userpurge n(PPCRegister* __shifted(PPCContext, 0x80) ctx@<rbx>, uintptr_t base@<r15>, uintptr_t frame@<r14>) { \
+#define PPC_IMPORT_FUNC_IMPL(n,i) __attribute__((preserve_none)) void n(uintptr_t ctx, uintptr_t base, uintptr_t frame) { \
     PPC_CALL_INDIRECT_FUNC(PrecompiledImportTable[i].dest_addr); \
 }
 #endif
@@ -487,7 +488,7 @@ struct alignas(0x10) PPCContext
   PPCVRegister v126;
 };
 
-typedef void __userpurge PPCFunc(PPCRegister* __shifted(PPCContext, 0x80) ctx@<rbx>, uintptr_t base@<r15>, uintptr_t frame@<r14>);
+typedef __attribute__((preserve_none)) void PPCFunc(uintptr_t ctx, uintptr_t base, uintptr_t frame);
 
 extern PPCFunc* HostFuncs[];
 extern int HostFuncsCount;
