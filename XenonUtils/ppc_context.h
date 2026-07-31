@@ -5,6 +5,10 @@
 #error "ppc_config.h must be included before ppc_context.h"
 #endif
 
+#ifndef __XEO3_PRESERVE_NONE__
+#error "Clang fork using modified preserve_none calling convention is required to compile this code."
+#endif
+
 #include <climits>
 #include <cmath>
 #include <csetjmp>
