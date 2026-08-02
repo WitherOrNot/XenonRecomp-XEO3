@@ -81,15 +81,27 @@ void RegisterFunctionsSearch(Image& image)
     }
 }
 
+int SearchInstr(int start, uint32_t* code, uint64_t base, int id, ppc_insn& insn) {
+    for (int k = start; k < 64; k++) {
+        ppc::Disassemble(code + k, base + 4*k, insn);
+
+        if (insn.opcode->id == id) {
+            return k;
+        }
+    }
+}
+
 void ReadTable(Image& image, SwitchTable& table)
 {
     uint32_t pOffset;
     ppc_insn insn;
+    int reg1;
+    
     auto* code = (uint32_t*)image.Find(table.base);
     ppc::Disassemble(code, table.base, insn);
     pOffset = insn.operands[1] << 16;
 
-    ppc::Disassemble(code + 1, table.base + 4, insn);
+    SearchInstr(1, code, table.base, PPC_INST_ADDI, insn);
     pOffset += insn.operands[2];
 
     if (table.type == SWITCH_ABSOLUTE)
@@ -106,14 +118,14 @@ void ReadTable(Image& image, SwitchTable& table)
         uint32_t shift;
         const auto* offsets = (uint8_t*)image.Find(pOffset);
 
-        ppc::Disassemble(code + 4, table.base + 0x10, insn);
+        int sw_start = SearchInstr(1, code, table.base, PPC_INST_RLWINM, insn);
+        shift = insn.operands[2];
+
+        sw_start = SearchInstr(sw_start, code, table.base, PPC_INST_LIS, insn);
         base = insn.operands[1] << 16;
 
-        ppc::Disassemble(code + 5, table.base + 0x14, insn);
+        sw_start = SearchInstr(sw_start, code, table.base, PPC_INST_ADDI, insn);
         base += insn.operands[2];
-
-        ppc::Disassemble(code + 3, table.base + 0x0C, insn);
-        shift = insn.operands[2];
 
         for (size_t i = 0; i < table.labels.size(); i++)
         {
@@ -127,10 +139,10 @@ void ReadTable(Image& image, SwitchTable& table)
             const auto* offsets = (uint8_t*)image.Find(pOffset);
             uint32_t base;
 
-            ppc::Disassemble(code + 3, table.base + 0x0C, insn);
+            int sw_start = SearchInstr(2, code, table.base, PPC_INST_LIS, insn);
             base = insn.operands[1] << 16;
 
-            ppc::Disassemble(code + 4, table.base + 0x10, insn);
+            sw_start = SearchInstr(sw_start, code, table.base, PPC_INST_ADDI, insn);
             base += insn.operands[2];
 
             for (size_t i = 0; i < table.labels.size(); i++)
@@ -143,10 +155,10 @@ void ReadTable(Image& image, SwitchTable& table)
             const auto* offsets = (be<uint16_t>*)image.Find(pOffset);
             uint32_t base;
 
-            ppc::Disassemble(code + 4, table.base + 0x10, insn);
+            int sw_start = SearchInstr(3, code, table.base, PPC_INST_LIS, insn);
             base = insn.operands[1] << 16;
 
-            ppc::Disassemble(code + 5, table.base + 0x14, insn);
+            sw_start = SearchInstr(sw_start, code, table.base, PPC_INST_ADDI, insn);
             base += insn.operands[2];
 
             for (size_t i = 0; i < table.labels.size(); i++)
@@ -214,11 +226,23 @@ void* SearchMask(const void* source, const uint32_t* compare, size_t compareCoun
     for (size_t i = 0; i < count; i++)
     {
         size_t c = 0;
+        size_t off = 0;
+
         for (c = 0; c < compareCount; c++)
         {
-            ppc::Disassemble(&src[i + c], 0, insn);
-            if (insn.opcode == nullptr || insn.opcode->id != compare[c])
+            ppc::Disassemble(&src[i + c + off], 0, insn);
+            if (insn.opcode == nullptr)
             {
+                break;
+            }
+
+            if (insn.opcode->id == PPC_INST_NOP) {
+                off++;
+                c--;
+                continue;
+            }
+
+            if (insn.opcode->id != compare[c]) {
                 break;
             }
         }
@@ -357,6 +381,18 @@ int main(int argc, char** argv)
         PPC_INST_MTCTR,
     };
 
+    uint32_t wordOffsetSwitch2[] =
+    {
+        PPC_INST_LIS,
+        PPC_INST_RLWINM,
+        PPC_INST_ADDI,
+        PPC_INST_LHZX,
+        PPC_INST_LIS,
+        PPC_INST_ADDI,
+        PPC_INST_ADD,
+        PPC_INST_MTCTR,
+    };
+
     println("# ---- ABSOLUTE JUMPTABLE ----");
     scanPattern(absoluteSwitch, std::size(absoluteSwitch), SWITCH_ABSOLUTE);
 
@@ -366,6 +402,7 @@ int main(int argc, char** argv)
     println("# ---- OFFSETED JUMPTABLE ----");
     scanPattern(offsetSwitch, std::size(offsetSwitch), SWITCH_BYTEOFFSET);
     scanPattern(wordOffsetSwitch, std::size(wordOffsetSwitch), SWITCH_SHORTOFFSET);
+    scanPattern(wordOffsetSwitch2, std::size(wordOffsetSwitch2), SWITCH_SHORTOFFSET);
 
     std::ofstream f(argv[2]);
     f.write(out.data(), out.size());

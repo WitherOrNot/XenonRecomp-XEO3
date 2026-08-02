@@ -22,6 +22,7 @@
 #include <x86intrin.h>
 #include <xmmintrin.h>
 #include <smmintrin.h>
+#include <emmintrin.h>
 #endif
 
 #define PPC_JOIN(x, y) x##y
@@ -137,6 +138,7 @@ struct PPCImportMapping
 
 extern "C" PPCFuncMapping PPCFuncMappings[];
 __declspec(dllexport) extern "C" PPCImportMapping PrecompiledImportTable[];
+__declspec(dllexport) extern "C" uintptr_t PrecompiledPointers[];
 
 union PPCRegister
 {
@@ -251,6 +253,7 @@ struct PPCFPSCRRegister
     inline void enableFlushModeUnconditional() noexcept
     {
         csr |= FlushMask;
+        csr |= _MM_MASK_INEXACT;
         _mm_setcsr(csr);
     }
 
@@ -265,6 +268,7 @@ struct PPCFPSCRRegister
         if ((csr & FlushMask) != FlushMask) [[unlikely]]
         {
             csr |= FlushMask;
+            csr |= _MM_MASK_INEXACT;
             _mm_setcsr(csr);
         }
     }
@@ -361,7 +365,7 @@ struct alignas(0x10) PPCContext
   PPCRegister f28;
   PPCRegister f29;
   PPCRegister f30;
-  PPCRegister fpscr;
+  PPCFPSCRRegister fpscr;
   uint64_t msr;
   PPCRegister reserved;
   PPCVRegister v0;
@@ -712,6 +716,22 @@ inline __m128i _mm_vsl(__m128i a, __m128i b)
     );
     
     return shifted;
+}
+
+inline __m128i _mm_adds_epi32(__m128i a, __m128i b)
+{
+    __m128i int_min = _mm_set1_epi32(0x80000000);
+    __m128i int_max = _mm_set1_epi32(0x7FFFFFFF);
+
+    const __m128i res = _mm_add_epi32(a, b);
+    const __m128i sign_and = _mm_and_si128(a, b);
+    const __m128i sign_or = _mm_or_si128(a, b);
+
+    const __m128i min_sat_mask = _mm_andnot_si128(res, sign_and);
+    const __m128i max_sat_mask = _mm_andnot_si128(sign_or, res);
+    const __m128 res_temp =
+    _mm_blendv_ps(_mm_castsi128_ps(res), _mm_castsi128_ps(int_min), _mm_castsi128_ps(min_sat_mask));
+    return _mm_castps_si128(_mm_blendv_ps(res_temp, _mm_castsi128_ps(int_max), _mm_castsi128_ps(max_sat_mask)));
 }
 
 #endif

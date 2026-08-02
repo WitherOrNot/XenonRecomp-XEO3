@@ -900,18 +900,18 @@ bool Recompiler::Recompile(
 
 
     case PPC_INST_DCBZ:
-        print("\tmemset(base + ((");
+        print("\tmemset((void*)(base + ((");
         if (insn.operands[0] != 0)
             print("{}.u32 + ", r(insn.operands[0]));
-        println("{}.u32) & ~31), 0, 32);", r(insn.operands[1]));
+        println("{}.u32) & ~31)), 0, 32);", r(insn.operands[1]));
         break;
 
 
     case PPC_INST_DCBZL:
-        print("\tmemset(base + ((");
+        print("\tmemset((void*)(base + ((");
         if (insn.operands[0] != 0)
             print("{}.u32 + ", r(insn.operands[0]));
-        println("{}.u32) & ~127), 0, 128);", r(insn.operands[1]));
+        println("{}.u32) & ~127)), 0, 128);", r(insn.operands[1]));
         break;
 
 
@@ -1391,6 +1391,11 @@ bool Recompiler::Recompile(
         println("{}.u32);", r(insn.operands[2]));
         break;
 
+    case PPC_INST_LWAUX:
+        println("\t{} = {}.u32 + {}.u32;", ea(), r(insn.operands[1]), r(insn.operands[2]));
+        println("\t{}.s64 = int32_t(PPC_LOAD_U32({}));", r(insn.operands[0]), ea());
+        println("\t{}.u32 = {};", r(insn.operands[1]), ea());
+        break;
 
     case PPC_INST_MFCR:
         for (size_t i = 0; i < 32; i++)
@@ -1860,6 +1865,8 @@ bool Recompiler::Recompile(
 
     case PPC_INST_STVLX:
     case PPC_INST_STVLX128:
+    case PPC_INST_STVLXL:
+    case PPC_INST_STVLXL128:
         // TODO: vectorize
         // NOTE: accounting for the full vector reversal here
         print("\t{} = ", ea());
@@ -1874,6 +1881,8 @@ bool Recompiler::Recompile(
 
     case PPC_INST_STVRX:
     case PPC_INST_STVRX128:
+    case PPC_INST_STVRXL:
+    case PPC_INST_STVRXL128:
         // TODO: vectorize
         // NOTE: accounting for the full vector reversal here
         print("\t{} = ", ea());
@@ -1888,6 +1897,8 @@ bool Recompiler::Recompile(
 
     case PPC_INST_STVX:
     case PPC_INST_STVX128:
+    case PPC_INST_STVXL:
+    case PPC_INST_STVXL128:
         print("\t_mm_store_si128((__m128i*)(base + ((");
         if (insn.operands[1] != 0)
             print("{}.u32 + ", r(insn.operands[1]));
@@ -2262,19 +2273,6 @@ bool Recompiler::Recompile(
         println("\t_mm_store_si128((__m128i*){}.s16, _mm_adds_epi16(_mm_load_si128((__m128i*){}.s16), _mm_load_si128((__m128i*){}.s16)));", v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
         break;
 
-/*
-    case PPC_INST_VADDSWS:
-        // TODO(crack): vectorize - SSE doesn't have _mm_adds_epi32
-        for (size_t i = 0; i < 4; i++)
-        {
-            println("\t{}.s64 = int64_t({}.s32[{}]) + int64_t({}.s32[{}]);", temp(), v(insn.operands[1]), i, v(insn.operands[2]), i);
-            println("\t{}.s32[{}] = {}.s64 > INT_MAX ? INT_MAX : {}.s64 < INT_MIN ? INT_MIN : {}.s64;",
-                v(insn.operands[0]), i, temp(), temp(), temp());
-        }
-        break;
-        */
-
-
     case PPC_INST_VADDUBM:
         println("\t_mm_store_si128((__m128i*){}.u8, _mm_add_epi8(_mm_load_si128((__m128i*){}.u8), _mm_load_si128((__m128i*){}.u8)));", v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
         break;
@@ -2450,6 +2448,8 @@ bool Recompiler::Recompile(
 
     case PPC_INST_VCMPGTUH:
         println("\t_mm_store_si128((__m128i*){}.u8, _mm_cmpgt_epu16(_mm_load_si128((__m128i*){}.u16), _mm_load_si128((__m128i*){}.u16)));", v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
+        if (strchr(insn.opcode->name, '.'))
+            println("\t{}.setFromMask(_mm_load_ps({}.f32), 0xF);", cr(6), v(insn.operands[0]));
         break;
 
 
@@ -3156,10 +3156,10 @@ bool Recompiler::Recompile(
     case PPC_INST_LVX128:
     case PPC_INST_LVXL128:
     case PPC_INST_LVEHX: {
-        print("\tsimd::store_shuffled({}, simd::load_and_shuffle(base + ((", v(insn.operands[0]));
+        print("\t_mm_store_si128((__m128i*){}.u8, _mm_shuffle_epi8(_mm_load_si128((__m128i*)(base + ((", v(insn.operands[0]));
         if (insn.operands[1] != 0)
             print("{}.u32 + ", r(insn.operands[1]));
-        print("{}.u32) & ~0xF), VectorMaskL));\n", r(insn.operands[2]));
+        println("{}.u32) & ~0xF))), _mm_load_si128((__m128i*)VectorMaskL)));", r(insn.operands[2]));
         break;
 
 
@@ -3202,10 +3202,10 @@ bool Recompiler::Recompile(
 
 
     case PPC_INST_LHBRX:
-        println("\t{}.u16 = __builtin_bswap16(mem::loadVolatileU16<true>(base + {}.u32 + {}.u32));",
-            r(insn.operands[0]),
-            r(insn.operands[1] == 0 ? 0 : insn.operands[1]),
-            r(insn.operands[2]));
+        print("\t{}.u16 = __builtin_bswap32(PPC_LOAD_U32(base", r(insn.operands[0]));
+        if (insn.operands[1] != 0)
+            print(" + {}.u32", r(insn.operands[1]));
+        println(" + {}.u32));", r(insn.operands[2]));
         break;
 
 
@@ -3231,54 +3231,15 @@ bool Recompiler::Recompile(
         println("\t{}.u32 = {};", r(insn.operands[1]), ea());
         break;
 
-
-
-
-  
-    case PPC_INST_STVLXL:
-
-    case PPC_INST_STVLXL128: {
-        println("{{"); // ← Start a scoped block
-        println("\tuint32_t addr = ");
-        if (insn.operands[1] != 0)
-            print("{}.u32 + ", r(insn.operands[1]));
-        println("{}.u32;", r(insn.operands[2]));
-
-        println("\tuint32_t tmp_off = addr & 0xF;");
-        println("\tfor (size_t i = 0; i < (16 - tmp_off); i++)");
-        println("\t\tPPC_STORE_U8(addr + i, simd::extract_u8(simd::to_vec128i({}), 15 - i));", v(insn.operands[0]));
-        println("}}");
-        break;
-    }
-
-
-    case PPC_INST_STVRXL:
-
-    case PPC_INST_STVRXL128: {
-        println("{{");
-        println("\tuint32_t addr = ");
-        if (insn.operands[1] != 0)
-            print("{}.u32 + ", r(insn.operands[1]));
-        println("{}.u32;", r(insn.operands[2]));
-
-        println("\tuint32_t tmp_off = addr & 0xF;");
-        println("\tfor (size_t i = 0; i < tmp_off; i++)");
-        println("\t\tPPC_STORE_U8(addr - i - 1, simd::extract_u8(simd::to_vec128i({}), i));", v(insn.operands[0]));
-        println("}}");
-        break;
-    }
-
-
-
     case PPC_INST_STVEBX:
         // Compute 16-byte aligned effective address (as required by STVEX family)
         println("\t{} = ({}.u32 + {}.u32) & ~0xF;", ea(), r(insn.operands[1]), r(insn.operands[2]));
 
         // Compute the index within the vector (big-endian style)
-        println("\tmem::store8({}.u8[15 - (({}.u32 + {}.u32) & 0xF)], base[{}]);",
+        println("\tPPC_STORE_U8({}, {}.u8[15 - (({}.u32 + {}.u32) & 0xF)]);",
+            ea(),
             v(insn.operands[0]),
-            r(insn.operands[1]), r(insn.operands[2]),
-            ea());
+            r(insn.operands[1]), r(insn.operands[2]));
         break;
 
 
@@ -3307,90 +3268,91 @@ bool Recompiler::Recompile(
 
 
     case PPC_INST_VADDSBS:
-        println("\tsimd::store_i8({}.s8, simd::add_saturate_i8(simd::load_i8({}.s8), simd::load_i8({}.s8)));",
+        println("\t_mm_store_si128((__m128i*){}.s8, _mm_adds_epi8(_mm_load_si128((__m128i*){}.s8), _mm_load_si128((__m128i*){}.s8)));",
             v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
         break;
 
 
-    case PPC_INST_VADDSWS: {
-        println("\tsimd::store_u32({}.u32, simd::add_saturate_i32(simd::to_vec128i({}), simd::to_vec128i({})));",
+    case PPC_INST_VADDSWS:
+        println("\t_mm_store_si128((__m128i*){}.u32, _mm_adds_epi32(_mm_load_si128((__m128i*){}.u32), _mm_load_si128((__m128i*){}.u32)));",
             v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
         break;
-    }
+
 
     case PPC_INST_VADDUHS:
         println("\t_mm_store_si128((__m128i*){}.u16, _mm_adds_epu16(_mm_load_si128((__m128i*){}.u16), _mm_load_si128((__m128i*){}.u16)));", v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
     break;
         
     case PPC_INST_VCMPEQUH:
-        println("\tsimd::store_u16({}.u16, simd::cmpeq_i16(simd::load_u16({}.u16), simd::load_u16({}.u16)));",
+        println("\t_mm_store_si128((__m128i*){}.u16, _mm_cmpeq_epi16(_mm_load_si128((__m128i*){}.u16), _mm_load_si128((__m128i*){}.u16)));",
             v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
         if (strchr(insn.opcode->name, '.'))
-            println("\t{}.setFromMask(simd::load_u16({}.u16), 0xFFFF);", cr(6), v(insn.operands[0]));
+            println("\t{}.setFromMask(_mm_load_si128((__m128i*){}.u16), 0xFFFF);", cr(6), v(insn.operands[0]));
         break;
 
 
     case PPC_INST_VCMPGTSH:
-        println("\tsimd::store_i16({}.s16, simd::cmpgt_i16(simd::load_i16({}.s16), simd::load_i16({}.s16)));",
+        println("\t_mm_store_si128((__m128i*){}.s16, _mm_cmpgt_epi16(_mm_load_si128((__m128i*){}.s16), _mm_load_si128((__m128i*){}.s16)));",
             v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
         if (strchr(insn.opcode->name, '.'))
-            println("\t{}.setFromMask(simd::load_i16({}.s16), 0xFFFF);", cr(6), v(insn.operands[0]));
+            println("\t{}.setFromMask(_mm_load_si128((__m128i*){}.s16), 0xFFFF);", cr(6), v(insn.operands[0]));
         break;
 
 
     case PPC_INST_VCMPGTSW:
-        println("\tsimd::store_i32({}.s32, simd::cmpgt_i32(simd::load_i32({}.s32), simd::load_i32({}.s32)));",
+        println("\t_mm_store_si128((__m128i*){}.s32, _mm_cmpgt_epi32(_mm_load_si128((__m128i*){}.s32), _mm_load_si128((__m128i*){}.s32)));",
             v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
         if (strchr(insn.opcode->name, '.'))
-            println("\t{}.setFromMask(simd::load_i32({}.s32), 0xFFFF);", cr(6), v(insn.operands[0]));
+            println("\t{}.setFromMask(_mm_load_si128((__m128i*){}.s32), 0xFFFF);", cr(6), v(insn.operands[0]));
         break;
 
 
     case PPC_INST_VMINSW:
         printSetFlushMode(true);
-        println("\t{}.v128 = simd::min_i32({}.v128, {}.v128);",
+        println("\t{}.v128 = _mm_min_epi32({}.v128, {}.v128);",
             v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
         break;
 
 
     case PPC_INST_VAVGSW:
         printSetFlushMode(true);
-        println("\tsimd::vec128i sum = simd::add_i32({}.v128, {}.v128);", v(insn.operands[1]), v(insn.operands[2]));
-        println("\tsum = simd::add_i32(sum, simd::set1_i32(1));");
-        println("\t{}.v128 = simd::srai_i32(sum, 1);", v(insn.operands[0]));
+        println("\t{{");
+        println("\t__m128i sum = _mm_add_epi32({}.v128, {}.v128);", v(insn.operands[1]), v(insn.operands[2]));
+        println("\tsum = _mm_add_epi32(sum, _mm_set1_epi32(1));");
+        println("\t{}.v128 = _mm_srai_epi32(sum, 1);", v(insn.operands[0]));
+        println("\t}}");
         break;
 
 
     case PPC_INST_VSLO:
         printSetFlushMode(true);
-        println("\tsimd::vec128i shift_amt = simd::srli_i16({}.v128, 3);", v(insn.operands[2]));
-        println("\tint shift = simd::extract_u8(shift_amt, 15) & 0x1F;");
+        println("\t{{");
+        println("\t__m128i shift_amt = _mm_srli_i16({}.v128, 3);", v(insn.operands[2]));
+        println("\tint shift = shift_amt.u8[15] & 0x1F;");
         println("\tif (shift >= 16) {{");
-        println("\t\t{}.v128 = simd::zero_i128();", v(insn.operands[0]));
+        println("\t\t{}.v128 = _mm_setzero_si128();", v(insn.operands[0]));
         println("\t}} else {{");
-        println("\t\t{}.v128 = simd::alignr_i8(simd::zero_i128(), {}.v128, 16 - shift);", v(insn.operands[0]), v(insn.operands[1]));
+        println("\t\t{}.v128 = _mm_alignr_epi8(_mm_setzero_si128(), {}.v128, 16 - shift);", v(insn.operands[0]), v(insn.operands[1]));
+        println("\t}}");
         println("\t}}");
         break;
 
 
     case PPC_INST_VSUBSBS:
         printSetFlushMode(true);
-        println("\t{}.v128 = simd::sub_saturate_i8({}.v128, {}.v128);",
+        println("\t{}.v128 = _mm_subs_epi8({}.v128, {}.v128);",
             v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
         break;
 
-    case PPC_INST_VSRAB: {
-        printSetFlushMode(true);
-        println("simd::store_shuffled({}, simd::shift_right_arithmetic_i8(simd::to_vec128i({}), simd::and_u8(simd::to_vec128i({}), simd::set1_i8(0x7))));",
-            v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
+    case PPC_INST_VSRAB:
+        // TODO: vectorize
+        for (size_t i = 0; i < 16; i++)
+            println("\t{}.s8[{}] = {}.s8[{}] >> ({}.u8[{}] & 0x7);", v(insn.operands[0]), i, v(insn.operands[1]), i, v(insn.operands[2]), i);
         break;
-
-    }
-
 
 
     case PPC_INST_VSUBUBM:
-        println("\tsimd::store_u8({}.u8, simd::sub_u8(simd::load_u8({}.u8), simd::load_u8({}.u8)));",
+        println("\t_mm_store_si128((__m128i*){}.u8, _mm_sub_epi8(_mm_load_si128((__m128i*){}.u8), _mm_load_si128((__m128i*){}.u8)));",
             v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
         break;
 
