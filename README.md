@@ -6,7 +6,7 @@ Original README can be found [here](./README.orig.md).
 
 ## XEO3 Internals
 
-This emulator mainly simulates the hypervisor and important hardware (XMA and GPU). Everything else from kernel downwards just runs within this environment, which is what makes it possible to have an [emulated dashboard](https://www.youtube.com/watch?v=PcD0knw-QN8) with the right setup, and it's also why a set of system binaries (devkit-signed, version 17000.3) are distributed with the emulator. 
+This emulator mainly simulates the hypervisor and important hardware (Audio and GPU). Everything else from kernel downwards just runs within this environment, which is what makes it possible to have an [emulated dashboard](https://www.youtube.com/watch?v=PcD0knw-QN8) with the right setup, and it's also why a set of system binaries (devkit-signed, version 17000.3) are distributed with the emulator. 
 
 Interestingly, XEO3 doesn't emulate PowerPC at all to achieve this functionality. Instead, DLLs are loaded which contain recompiled PPC code for each module loaded by the hypervisor (some sources claim that these DLLs are shaders, they are not). Despite not needing the corresponding XEX files for their code, the emulator still loads and maps them into memory to make their data sections accessible.
 
