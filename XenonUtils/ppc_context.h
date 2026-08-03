@@ -64,8 +64,8 @@
 #define PPC_MM_LOAD_U16(x) PPC_LOAD_U16(x)
 #endif
 
-#ifndef PPC_MM_LOAD_U32
-#define PPC_MM_LOAD_U32(x) PPC_LOAD_U32(x)
+#ifndef PPC_MM_LOAD_U32 // Only 32-bit MMIO r/w is supported in XEO3
+#define PPC_MM_LOAD_U32(x) __builtin_bswap32(reinterpret_cast<uint32_t(__fastcall*)(uint32_t)>(PrecompiledPointers[8])(x))
 #endif
 
 #ifndef PPC_MM_LOAD_U64
@@ -98,8 +98,8 @@
 #define PPC_MM_STORE_U16(x, y)  PPC_STORE_U16(x, y)
 #endif
 
-#ifndef PPC_MM_STORE_U32
-#define PPC_MM_STORE_U32(x, y)  PPC_STORE_U32(x, y)
+#ifndef PPC_MM_STORE_U32 // Only 32-bit MMIO r/w is supported in XEO3
+#define PPC_MM_STORE_U32(x, y)  reinterpret_cast<void(__fastcall*)(uint32_t, uint32_t)>(PrecompiledPointers[9])(x, __builtin_bswap32(y))
 #endif
 
 #ifndef PPC_MM_STORE_U64

@@ -80,6 +80,14 @@ void RecompilerConfig::Load(const std::string_view& configFilePath)
             }
         }
 
+        if (auto mmioInstrArray = main["mmio_instructions"].as_array())
+        {
+            for (auto& entry : *mmioInstrArray)
+            {
+                mmioInstrs.insert(*entry.value<uint32_t>());
+            }
+        }
+
         if (!switchTableFilePath.empty())
         {
             toml::table switchToml = toml::parse_file(directoryPath + switchTableFilePath)
@@ -101,48 +109,6 @@ void RecompilerConfig::Load(const std::string_view& configFilePath)
                     switchTables.emplace(*table["base"].value<uint32_t>(), std::move(switchTable));
                 }
             }
-        }
-    }
-
-    if (auto midAsmHookArray = toml["midasm_hook"].as_array())
-    {
-        for (auto& entry : *midAsmHookArray)
-        {
-            auto& table = *entry.as_table();
-
-            RecompilerMidAsmHook midAsmHook;
-            midAsmHook.name = *table["name"].value<std::string>();
-            if (auto registerArray = table["registers"].as_array())
-            {
-                for (auto& reg : *registerArray)
-                    midAsmHook.registers.push_back(*reg.value<std::string>());
-            }
-
-            midAsmHook.ret = table["return"].value_or(false);
-            midAsmHook.returnOnTrue = table["return_on_true"].value_or(false);
-            midAsmHook.returnOnFalse = table["return_on_false"].value_or(false);
-
-            midAsmHook.jumpAddress = table["jump_address"].value_or(0u);
-            midAsmHook.jumpAddressOnTrue = table["jump_address_on_true"].value_or(0u);
-            midAsmHook.jumpAddressOnFalse = table["jump_address_on_false"].value_or(0u);
-
-            if ((midAsmHook.ret && midAsmHook.jumpAddress != NULL) ||
-                (midAsmHook.returnOnTrue && midAsmHook.jumpAddressOnTrue != NULL) ||
-                (midAsmHook.returnOnFalse && midAsmHook.jumpAddressOnFalse != NULL))
-            {
-                fmt::println("{}: can't return and jump at the same time", midAsmHook.name);
-            }
-
-            if ((midAsmHook.ret || midAsmHook.jumpAddress != NULL) &&
-                (midAsmHook.returnOnFalse != NULL || midAsmHook.returnOnTrue != NULL ||
-                    midAsmHook.jumpAddressOnFalse != NULL || midAsmHook.jumpAddressOnTrue != NULL))
-            {
-                fmt::println("{}: can't mix direct and conditional return/jump", midAsmHook.name);
-            }
-
-            midAsmHook.afterInstruction = table["after_instruction"].value_or(false);
-
-            midAsmHooks.emplace(*table["address"].value<uint32_t>(), std::move(midAsmHook));
         }
     }
 }

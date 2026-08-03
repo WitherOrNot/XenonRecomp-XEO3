@@ -264,7 +264,7 @@ bool Recompiler::Recompile(
     RecompilerLocalVariables& localVariables,
     CSRState& csrState)
 {
-    println("\t// {} {}", insn.opcode->name, insn.op_str);
+    println("\t// {:X} {} {}", base, insn.opcode->name, insn.op_str);
 
     // TODO: we could cache these formats in an array
     auto r = [&](size_t index)
@@ -367,7 +367,7 @@ bool Recompiler::Recompile(
     // TODO (Sajid): Check for out of bounds access
     auto mmioStore = [&]() -> bool
         {
-            return *(data + 1) == c_eieio;
+            return config.mmioInstrs.find(base) != config.mmioInstrs.end();
         };
 
     auto printFunctionCall = [&](uint32_t address)
@@ -1332,7 +1332,7 @@ bool Recompiler::Recompile(
 
 
     case PPC_INST_LWA:
-        print("\t{}.s64 = int32_t(PPC_LOAD_U32(", r(insn.operands[0]));
+        print("\t{}.s64 = int32_t({}(", r(insn.operands[0]), mmioStore() ? "PPC_MM_LOAD_U32" : "PPC_LOAD_U32");
         if (insn.operands[2] != 0)
             print("{}.u32 + ", r(insn.operands[2]));
         println("{}));", int32_t(insn.operands[1]));
@@ -1349,7 +1349,7 @@ bool Recompiler::Recompile(
 
 
     case PPC_INST_LWAX:
-        print("\t{}.s64 = int32_t(PPC_LOAD_U32(", r(insn.operands[0]));
+        print("\t{}.s64 = int32_t({}(", r(insn.operands[0]), mmioStore() ? "PPC_MM_LOAD_U32" : "PPC_LOAD_U32");
         if (insn.operands[1] != 0)
             print("{}.u32 + ", r(insn.operands[1]));
         println("{}.u32));", r(insn.operands[2]));
@@ -1357,7 +1357,7 @@ bool Recompiler::Recompile(
 
 
     case PPC_INST_LWBRX:
-        print("\t{}.u64 = __builtin_bswap32(PPC_LOAD_U32(", r(insn.operands[0]));
+        print("\t{}.u64 = __builtin_bswap32({}(", r(insn.operands[0]), mmioStore() ? "PPC_MM_LOAD_U32" : "PPC_LOAD_U32");
         if (insn.operands[1] != 0)
             print("{}.u32 + ", r(insn.operands[1]));
         println("{}.u32));", r(insn.operands[2]));
@@ -1370,7 +1370,7 @@ bool Recompiler::Recompile(
 
 
     case PPC_INST_LWZ:
-        print("\t{}.u64 = PPC_LOAD_U32(", r(insn.operands[0]));
+        print("\t{}.u64 = {}(", r(insn.operands[0]), mmioStore() ? "PPC_MM_LOAD_U32" : "PPC_LOAD_U32");
         if (insn.operands[2] != 0)
             print("{}.u32 + ", r(insn.operands[2]));
         println("{});", int32_t(insn.operands[1]));
@@ -1379,13 +1379,13 @@ bool Recompiler::Recompile(
 
     case PPC_INST_LWZU:
         println("\t{} = {} + {}.u32;", ea(), int32_t(insn.operands[1]), r(insn.operands[2]));
-        println("\t{}.u64 = PPC_LOAD_U32({});", r(insn.operands[0]), ea());
+        println("\t{}.u64 = {}({});", r(insn.operands[0]), mmioStore() ? "PPC_MM_LOAD_U32" : "PPC_LOAD_U32", ea());
         println("\t{}.u32 = {};", r(insn.operands[2]), ea());
         break;
 
 
     case PPC_INST_LWZX:
-        print("\t{}.u64 = PPC_LOAD_U32(", r(insn.operands[0]));
+        print("\t{}.u64 = {}(", r(insn.operands[0]), mmioStore() ? "PPC_MM_LOAD_U32" : "PPC_LOAD_U32");
         if (insn.operands[1] != 0)
             print("{}.u32 + ", r(insn.operands[1]));
         println("{}.u32);", r(insn.operands[2]));
@@ -1393,7 +1393,7 @@ bool Recompiler::Recompile(
 
     case PPC_INST_LWAUX:
         println("\t{} = {}.u32 + {}.u32;", ea(), r(insn.operands[1]), r(insn.operands[2]));
-        println("\t{}.s64 = int32_t(PPC_LOAD_U32({}));", r(insn.operands[0]), ea());
+        println("\t{}.s64 = int32_t({}({}));", r(insn.operands[0]), mmioStore() ? "PPC_MM_LOAD_U32" : "PPC_LOAD_U32", ea());
         println("\t{}.u32 = {};", r(insn.operands[1]), ea());
         break;
 

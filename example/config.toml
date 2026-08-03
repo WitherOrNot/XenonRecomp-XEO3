@@ -1,0 +1,49 @@
+# Example file that builds working DLL for Chaos;Head Love Chu Chu!
+
+[main]
+file_path = "./default.xex"
+out_directory_path = "./ppc"
+switch_table_file_path = "./switch.toml"
+
+# Given by XenonAnalyse
+restgprlr_14_address = 0x8249BBC0
+savegprlr_14_address = 0x8249BB70
+restfpr_14_address = 0x8249C91C
+savefpr_14_address = 0x8249C8D0
+restvmx_14_address = 0x8249F1D8
+savevmx_14_address = 0x8249EF40
+restvmx_64_address = 0x8249F26C
+savevmx_64_address = 0x8249EFD4
+
+# Function boundaries, prevents "switch statement jumps outside function" error
+functions = [
+    { address = 0x820fbfc8, size = 0xc0 },
+    { address = 0x821cd6a0, size = 0x114 },
+    { address = 0x8221be78, size = 0x110 },
+    { address = 0x8226bfb0, size = 0x80 },
+    { address = 0x8226c030, size = 0x48 },
+    { address = 0x8236a1f0, size = 0x68 },
+    { address = 0x8236a258, size = 0x64 },
+    { address = 0x8236a2c0, size = 0x5c },
+    { address = 0x8236a320, size = 0x198 },
+    { address = 0x8236a4b8, size = 0x16c },
+]
+
+# First 4 bytes and size of any data wrongly interpreted as instructions
+invalid_instructions = [
+    # { data = 0x00000000, size = 4 },
+]
+
+# Addresses of instructions that do MMIO reads or writes
+mmio_instructions = [
+    0x82182B88,
+    0x82182D84,
+    0x82192708,
+    0x821930CC,
+    0x82194870,
+    0x8219487C,
+    0x8245FF64,
+    0x82460094,
+    0x8246080C,
+    0x82460928
+]

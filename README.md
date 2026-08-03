@@ -31,11 +31,11 @@ This is a table of function pointers needed for interacting with the emulator.
 2 - void __fastcall Syscall()                                         // Do syscall, with syscall number in r3
 3 - uint32_t __fastcall GetCR(PPCContext* ctx)                        // Get value of full CR register
 4 - uint64_t __fastcall GetFrequency()                                // Get emulator frequency
-5 - void __fastcall RaiseException(int type)                          // Raise exception from guest code
+5 - void __fastcall RaiseException(uint64_t address)                  // Raise exception from guest code at specified address
 6 - unused
 7 - unused
-8 - uint32_t __fastcall MMIORead(uint32_t address)                    // Read MMIO address
-9 - void __fastcall MMIOWrite(uint32_t address, uint32_t value)       // Write MMIO address
+8 - uint32_t __fastcall MMIORead(uint32_t address)                    // Read MMIO address (value is endian-swapped)
+9 - void __fastcall MMIOWrite(uint32_t address, uint32_t value)       // Write MMIO address (value is endian-swapped)
 ```
 
 Most of these are only used by the kernel or XeFu.
@@ -60,13 +60,11 @@ I had to create a [custom version](https://github.com/WitherOrNot/llvm-project/r
 
 1. Clone and build with Visual Studio CMake.
 2. Run `XenonAnalyse.exe default.xex switch.toml` to collect switch statement and register save-restore info.
-3. Create `config.toml` ([reference](https://github.com/hedge-dev/UnleashedRecomp/blob/main/UnleashedRecompLib/config/SWA.toml)) containing path to `switch.toml` and function info.
+3. Create `config.toml` ([reference](./example/config.toml)) containing path to `switch.toml` along with function boundaries, MMIO instructions, and invalid instructions as needed. 
 4. Run `XenonRecomp.exe config.toml ppc_context.h`, with `ppc_context.h` from `XenonUtils` folder.
 5. Copy `ppc_precomp_init.cpp` from `XenonUtils` folder to recompiler output directory.
 6. Compile the source files to DLL with custom clang, using `-mavx` (`/arch:AVX` for `clang-cl`).
 
 ## Current status
 
-On all binaries that I have been able to test, including samples from the Xbox 360 SDK, graphics are so far non-functional.
-
-I have so far managed to get Chaos;Head Love Chu Chu to boot up and play its title music, and I could interact with a partially-functioning menu. This confirms that recompiled code can correctly interact with the emulated kernel and XMA devices, and that the game's asset decoding routines are working.
+Chaos;Head Love Chu Chu was successfully recompiled and runs playably in XEO3 using this recompilation method.
