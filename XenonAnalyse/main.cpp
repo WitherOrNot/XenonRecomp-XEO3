@@ -346,6 +346,16 @@ int main(int argc, char** argv)
         PPC_INST_BCTR,
     };
 
+    uint32_t absoluteSwitch2[] =
+    {
+        PPC_INST_LIS,
+        PPC_INST_RLWINM,
+        PPC_INST_ADDI,
+        PPC_INST_LWZX,
+        PPC_INST_MTCTR,
+        PPC_INST_BCTR,
+    };
+
     uint32_t computedSwitch[] =
     {
         PPC_INST_LIS,
@@ -395,6 +405,7 @@ int main(int argc, char** argv)
 
     println("# ---- ABSOLUTE JUMPTABLE ----");
     scanPattern(absoluteSwitch, std::size(absoluteSwitch), SWITCH_ABSOLUTE);
+    scanPattern(absoluteSwitch2, std::size(absoluteSwitch2), SWITCH_ABSOLUTE);
 
     println("# ---- COMPUTED JUMPTABLE ----");
     scanPattern(computedSwitch, std::size(computedSwitch), SWITCH_COMPUTED);

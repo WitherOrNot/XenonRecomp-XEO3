@@ -253,7 +253,7 @@ struct PPCFPSCRRegister
     inline void enableFlushModeUnconditional() noexcept
     {
         csr |= FlushMask;
-        csr |= _MM_MASK_INEXACT;
+        csr |= _MM_MASK_MASK;
         _mm_setcsr(csr);
     }
 
@@ -268,7 +268,7 @@ struct PPCFPSCRRegister
         if ((csr & FlushMask) != FlushMask) [[unlikely]]
         {
             csr |= FlushMask;
-            csr |= _MM_MASK_INEXACT;
+            csr |= _MM_MASK_MASK;
             _mm_setcsr(csr);
         }
     }
