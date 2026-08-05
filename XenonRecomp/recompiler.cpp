@@ -3202,10 +3202,10 @@ bool Recompiler::Recompile(
 
 
     case PPC_INST_LHBRX:
-        print("\t{}.u16 = __builtin_bswap32(PPC_LOAD_U32(base", r(insn.operands[0]));
+        print("\t{}.u64 = __builtin_bswap16(PPC_LOAD_U16(", r(insn.operands[0]));
         if (insn.operands[1] != 0)
-            print(" + {}.u32", r(insn.operands[1]));
-        println(" + {}.u32));", r(insn.operands[2]));
+            print("{}.u32 + ", r(insn.operands[1]));
+        println("{}.u32));", r(insn.operands[2]));
         break;
 
 
