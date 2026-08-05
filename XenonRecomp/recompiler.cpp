@@ -3309,7 +3309,7 @@ bool Recompiler::Recompile(
 
     case PPC_INST_VMINSW:
         printSetFlushMode(true);
-        println("\t{}.v128 = _mm_min_epi32({}.v128, {}.v128);",
+        println("\t_mm_store_si128((__m128i*){}.s32, _mm_min_epi32(_mm_load_si128((__m128i*){}.s32), _mm_load_si128((__m128i*){}.s32)));",
             v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
         break;
 
@@ -3317,30 +3317,36 @@ bool Recompiler::Recompile(
     case PPC_INST_VAVGSW:
         printSetFlushMode(true);
         println("\t{{");
-        println("\t__m128i sum = _mm_add_epi32({}.v128, {}.v128);", v(insn.operands[1]), v(insn.operands[2]));
+        println("\t__m128i sum = _mm_add_epi32(_mm_load_si128((__m128i*){}.s32), _mm_load_si128((__m128i*){}.s32));", v(insn.operands[1]), v(insn.operands[2]));
         println("\tsum = _mm_add_epi32(sum, _mm_set1_epi32(1));");
-        println("\t{}.v128 = _mm_srai_epi32(sum, 1);", v(insn.operands[0]));
+        println("\t_mm_store_si128((__m128i*){}.s32, _mm_srai_epi32(sum, 1));", v(insn.operands[0]));
         println("\t}}");
         break;
 
 
     case PPC_INST_VSLO:
+    case PPC_INST_VSLO128:
         printSetFlushMode(true);
         println("\t{{");
-        println("\t__m128i shift_amt = _mm_srli_i16({}.v128, 3);", v(insn.operands[2]));
-        println("\tint shift = shift_amt.u8[15] & 0x1F;");
-        println("\tif (shift >= 16) {{");
-        println("\t\t{}.v128 = _mm_setzero_si128();", v(insn.operands[0]));
-        println("\t}} else {{");
-        println("\t\t{}.v128 = _mm_alignr_epi8(_mm_setzero_si128(), {}.v128, 16 - shift);", v(insn.operands[0]), v(insn.operands[1]));
-        println("\t}}");
+        println("\tint shift = ({}.u8[15] >> 3) & 0xF;", v(insn.operands[2]));
+        println("\t_mm_store_si128((__m128i*){}.u8, _mm_setzero_si128());", v(insn.operands[0]));
+        println("\tmemcpy({}.u8, {}.u8 + shift, 16 - shift);", v(insn.operands[0]), v(insn.operands[1]));
         println("\t}}");
         break;
 
+    case PPC_INST_VSRO:
+    case PPC_INST_VSRO128:
+        printSetFlushMode(true);
+        println("\t{{");
+        println("\tint shift = ({}.u8[15] >> 3) & 0xF;", v(insn.operands[2]));
+        println("\t_mm_store_si128((__m128i*){}.u8, _mm_setzero_si128());", v(insn.operands[0]));
+        println("\tmemcpy({}.u8 + shift, {}.u8, 16 - shift);", v(insn.operands[0]), v(insn.operands[1]));
+        println("\t}}");
+        break;
 
     case PPC_INST_VSUBSBS:
         printSetFlushMode(true);
-        println("\t{}.v128 = _mm_subs_epi8({}.v128, {}.v128);",
+        println("\t_mm_store_si128((__m128i*){}.s8, _mm_subs_epi8(_mm_load_si128((__m128i*){}.s8), _mm_load_si128((__m128i*){}.s8)));",
             v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
         break;
 
