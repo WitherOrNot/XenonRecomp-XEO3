@@ -2957,7 +2957,9 @@ bool Recompiler::Recompile(
         println("\t_mm_store_si128((__m128i*){}.u8, _mm_sub_epi16(_mm_load_si128((__m128i*){}.u8), _mm_load_si128((__m128i*){}.u8)));", v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
         break;
 
-
+    case PPC_INST_VSUBUWM:
+        println("\t_mm_store_si128((__m128i*){}.u8, _mm_sub_epi32(_mm_load_si128((__m128i*){}.u8), _mm_load_si128((__m128i*){}.u8)));", v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
+        break;
 
     case PPC_INST_VUPKD3D128:
         // TODO: vectorize somehow?
@@ -3282,7 +3284,7 @@ bool Recompiler::Recompile(
     case PPC_INST_VADDUHS:
         println("\t_mm_store_si128((__m128i*){}.u16, _mm_adds_epu16(_mm_load_si128((__m128i*){}.u16), _mm_load_si128((__m128i*){}.u16)));", v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
     break;
-        
+    
     case PPC_INST_VCMPEQUH:
         println("\t_mm_store_si128((__m128i*){}.u16, _mm_cmpeq_epi16(_mm_load_si128((__m128i*){}.u16), _mm_load_si128((__m128i*){}.u16)));",
             v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
@@ -3290,6 +3292,12 @@ bool Recompiler::Recompile(
             println("\t{}.setFromMask(_mm_load_si128((__m128i*){}.u16), 0xFFFF);", cr(6), v(insn.operands[0]));
         break;
 
+    case PPC_INST_VCMPGTSB:
+        println("\t_mm_store_si128((__m128i*){}.s8, _mm_cmpgt_epi8(_mm_load_si128((__m128i*){}.s8), _mm_load_si128((__m128i*){}.s8)));",
+            v(insn.operands[0]), v(insn.operands[1]), v(insn.operands[2]));
+        if (strchr(insn.opcode->name, '.'))
+            println("\t{}.setFromMask(_mm_load_si128((__m128i*){}.s8), 0xFFFF);", cr(6), v(insn.operands[0]));
+        break;
 
     case PPC_INST_VCMPGTSH:
         println("\t_mm_store_si128((__m128i*){}.s16, _mm_cmpgt_epi16(_mm_load_si128((__m128i*){}.s16), _mm_load_si128((__m128i*){}.s16)));",
