@@ -28,7 +28,7 @@ This is a table of function pointers needed for interacting with the emulator.
 ```
 0 - void __fastcall CallGuestFunc(uint32_t ppc_func_addr)             // Call arbitrary address in emulated system address space
 1 - void __fastcall CallHostFunction(void* unknown, uint16_t ordinal) // Call various emulator-provided functions
-2 - void __fastcall Syscall()                                         // Do syscall, with syscall number in r3
+2 - void __fastcall Syscall()                                         // Do syscall, with syscall number in r0
 3 - uint32_t __fastcall GetCR(PPCContext* ctx)                        // Get value of full CR register
 4 - uint64_t __fastcall GetFrequency()                                // Get emulator frequency
 5 - void __fastcall RaiseException(uint64_t address)                  // Raise exception from guest code at specified address
